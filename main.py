@@ -8,11 +8,14 @@ from tkinter import ttk, messagebox, simpledialog
 import random
 import json
 import os
+import math
+import array
 from words import get_words, WORD_BANKS
 
 # Try to import optional libraries
 try:
     import pygame
+    import numpy as np
     PYGAME_AVAILABLE = True
 except ImportError:
     PYGAME_AVAILABLE = False
@@ -42,14 +45,22 @@ class HangmanGame:
             except:
                 print("Text-to-speech initialization failed")
         
+        # Initialize sound attributes to None
+        self.sound_enabled = False
+        self.sound_correct = None
+        self.sound_wrong = None
+        self.sound_win = None
+        self.sound_lose = None
+        
         # Initialize pygame for sound effects
         if PYGAME_AVAILABLE:
             try:
                 pygame.mixer.init()
                 # Create simple sound effects
                 self.create_sound_effects()
-            except:
-                print("Sound effects initialization failed")
+                self.sound_enabled = True
+            except Exception as e:
+                print(f"Sound effects initialization failed: {e}")
         
         # Game state
         self.word = ""
@@ -71,13 +82,83 @@ class HangmanGame:
     def create_sound_effects(self):
         """Create simple sound effects using pygame"""
         try:
-            # We'll use simple beep sounds since we can't load external files
+            # Generate simple beep sounds with different frequencies
+            self.sound_correct = self.generate_tone(600, 0.15)  # Higher pitch for correct
+            self.sound_wrong = self.generate_tone(200, 0.2)     # Lower pitch for wrong
+            self.sound_win = self.generate_melody([(600, 0.1), (700, 0.1), (800, 0.2)])
+            self.sound_lose = self.generate_melody([(400, 0.1), (300, 0.1), (200, 0.2)])
+        except Exception as e:
+            print(f"Failed to create sound effects: {e}")
             self.sound_correct = None
             self.sound_wrong = None
             self.sound_win = None
             self.sound_lose = None
-        except:
-            pass
+    
+    def generate_tone(self, frequency, duration):
+        """Generate a simple tone using pygame"""
+        try:
+            sample_rate = 22050
+            n_samples = int(round(duration * sample_rate))
+            
+            # Generate sine wave
+            buf = np.sin(2 * np.pi * frequency * np.linspace(0, duration, n_samples))
+            
+            # Apply fade in/out to avoid clicks
+            fade_samples = int(sample_rate * 0.01)  # 10ms fade
+            fade_in = np.linspace(0, 1, fade_samples)
+            fade_out = np.linspace(1, 0, fade_samples)
+            buf[:fade_samples] *= fade_in
+            buf[-fade_samples:] *= fade_out
+            
+            # Convert to 16-bit integer
+            buf = (buf * 32767).astype(np.int16)
+            
+            # Create stereo sound (duplicate for left and right channels)
+            stereo = np.column_stack((buf, buf))
+            
+            # Create pygame sound
+            sound = pygame.sndarray.make_sound(stereo)
+            return sound
+        except Exception as e:
+            print(f"Failed to generate tone: {e}")
+            return None
+    
+    def generate_melody(self, notes):
+        """Generate a simple melody from a list of (frequency, duration) tuples"""
+        try:
+            sample_rate = 22050
+            total_samples = 0
+            buffers = []
+            
+            for frequency, duration in notes:
+                n_samples = int(round(duration * sample_rate))
+                buf = np.sin(2 * np.pi * frequency * np.linspace(0, duration, n_samples))
+                
+                # Apply fade to avoid clicks between notes
+                fade_samples = int(sample_rate * 0.005)  # 5ms fade
+                if len(buf) > fade_samples * 2:
+                    fade_in = np.linspace(0, 1, fade_samples)
+                    fade_out = np.linspace(1, 0, fade_samples)
+                    buf[:fade_samples] *= fade_in
+                    buf[-fade_samples:] *= fade_out
+                
+                buffers.append(buf)
+            
+            # Concatenate all notes
+            combined = np.concatenate(buffers)
+            
+            # Convert to 16-bit integer
+            combined = (combined * 32767).astype(np.int16)
+            
+            # Create stereo
+            stereo = np.column_stack((combined, combined))
+            
+            # Create pygame sound
+            sound = pygame.sndarray.make_sound(stereo)
+            return sound
+        except Exception as e:
+            print(f"Failed to generate melody: {e}")
+            return None
     
     def speak(self, text):
         """Text-to-speech function"""
@@ -90,10 +171,22 @@ class HangmanGame:
     
     def play_sound(self, sound_type):
         """Play sound effect"""
-        if not PYGAME_AVAILABLE:
+        if not self.sound_enabled:
             return
-        # Placeholder for sound effects
-        # In a full implementation, you would load actual sound files here
+        
+        try:
+            sound_map = {
+                "correct": self.sound_correct,
+                "wrong": self.sound_wrong,
+                "win": self.sound_win,
+                "lose": self.sound_lose
+            }
+            
+            sound = sound_map.get(sound_type)
+            if sound:
+                sound.play()
+        except Exception as e:
+            print(f"Failed to play sound: {e}")
     
     def load_leaderboard(self):
         """Load leaderboard from JSON file"""
