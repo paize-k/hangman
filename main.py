@@ -10,6 +10,7 @@ import json
 import os
 import math
 import array
+import flask
 from words import get_words, WORD_BANKS
 
 # Try to import optional libraries
@@ -28,7 +29,9 @@ except ImportError:
     TTS_AVAILABLE = False
     print("pyttsx3 not available - text-to-speech disabled")
 
+app = flask.Flask(__name__)
 
+@app.route('/')
 class HangmanGame:
     def __init__(self, root):
         self.root = root
@@ -686,3 +689,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    app.run()
